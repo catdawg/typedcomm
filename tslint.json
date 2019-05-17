@@ -1,0 +1,27 @@
+{
+    "defaultSeverity": "error",
+    "extends": [
+        "tslint:recommended"
+    ],
+    "jsRules": {},
+    "rules": {
+        "max-classes-per-file": false,
+        "variable-name": [true, "ban-keywords", "check-format", "allow-leading-underscore"],
+        "object-literal-sort-keys": false,
+        "switch-default": false,
+        "forin": false,
+        "no-conditional-assignment": false,
+        "no-floating-promises": true,
+        "no-unused-expression": true,
+        "promise-function-async": true,
+        "no-empty-interface": false
+    },
+    "rulesDirectory": [
+    ],
+    "linterOptions": {
+        "exclude": [
+            "node_modules",
+            "dist"
+        ]
+    }
+}
