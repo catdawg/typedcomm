@@ -8,9 +8,94 @@ TypedComm is a library for typescript projects that lets you define a protocol f
     npm install typedcomm --save
 ```
 
-# Usage
+# Example
 
-## Tell (emit) example
+Example of a client / server communication typed with interfaces defined in a shared.ts file.
+
+shared.ts
+```typescript
+
+import { AddAnswerFunction, AddHearFunction, AskFunction, TellFunction } from "../src";
+
+interface IMessageMap {
+    "PLAY": {piece: string, to: number};
+    "PLAY_RESULT": {success: boolean};
+    "LOG": {message: string};
+    "STOP": {};
+
+    // any new message is added here
+}
+
+interface IQuestionMap {
+    "PLAY": "PLAY_RESULT";
+
+    // any new question pair is added here
+}
+
+interface ICommunicator {
+    ask: AskFunction<IMessageMap, IQuestionMap>;
+    answer: AddAnswerFunction<IMessageMap, IQuestionMap>;
+
+    tell: TellFunction<IMessageMap>;
+    hear: AddHearFunction<IMessageMap>;
+
+    close: () => void;
+}
+
+```
+
+client.ts
+```typescript
+import {ICommunicator} from "shared";
+
+const server: ICommunicator = /* insert here code that sets up a communicator, e.g. connect to a server */;
+
+// if "LOG" is first argument, second is typed to {message: string}
+server.tell("LOG", {message: "setting up..."}); 
+
+// if "PLAY" is first argument, second is {piece: string, to: number}, and return is {success: boolean}
+if (server.ask("PLAY", {piece: "a", to: 10}).success) { 
+    server.tell("LOG", {message: "piece played"});
+} else {
+    server.tell("LOG", {message: "piece failed"});
+}
+
+server.tell("LOG", {message: "finishing..."});
+
+// if "STOP" is first argument, second is typed to {}
+server.stop("STOP", {});
+
+```
+
+server.ts
+```typescript
+import {ICommunicator} from "shared";
+
+const client: ICommunicator = /* insert here code that waits for a connection to be established */;
+
+
+// if "LOG" is first argument, param in lambda is typed to {message: string}
+client.hear("LOG", ({message}) => {
+    console.log(message);
+});
+
+// if "PLAY" is first argument, param in lambda is typed to {piece: string, to: number}
+client.answer("PLAY", ({piece, to}) => {
+    return {
+        success: true,
+    };
+});
+
+// if "STOP" is first argument, param in lambda is typed to {}
+client.hear("STOP", ({}) => {
+    client.close(); // assume this closes all listens from hear and answer
+});
+
+```
+
+# API
+
+## Tell (emit)
 ``TellFunction<MessageMap>`` is a type definition for a method like ``<N>(name: N, message: MessageMap[N]): void``. This lets you make sure that the string in ``name`` always corresponds to the right ``message`` structure passed.
 
 Example:
@@ -46,7 +131,7 @@ teller("GREETING", {});
 teller("OTHER_MESSAGE", {});
 ```
 
-## Hear (listen) example
+## Hear (listen)
 
 ``AddHearFunction<MessageMap>`` is a type definition for a method like ``<N>(name: N, handler: (message: MessageMap[N])): {cancel: () => void}``. This lets you make sure that the type of ``message`` corresponds to the correct type.
 
@@ -87,7 +172,7 @@ hearer("GREETING", ({other}) => {});
 hearer("OTHER_MESSAGE", ({}) => {});
 ```
 
-## Ask example
+## Ask
 
 ``AskFunction<MessageMap, QuestionMap>`` is a type definition for a method like ``<Q>(name: Q, message: MessageMap[Q]): MessageMap[QuestionMap[Q]]``. If you have an API that you send a payload with a specific structure, and you always expect the same payload structure back, you can use this to function type for that API.
 
@@ -132,7 +217,7 @@ const {value} = asker("GET_STATE", {something: "else"});
 ```
 
 
-## Answerer example
+## Answerer
 
 ``AddAnswerFunction<MessageMap, QuestionMap>`` is a type definition for a method like ``<Q>(name: Q, handler: (message: MessageMap[Q]) => {cancel: () => void}``. If you have an API that lets you register for "answering" a specific payload request with another specific payload response, you can use this to type that API.
 
