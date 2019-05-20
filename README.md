@@ -32,12 +32,16 @@ interface IQuestionMap {
     // any new question pair is added here
 }
 
-interface ICommunicator {
-    ask: AskFunction<IMessageMap, IQuestionMap>;
+interface IServerToClientCommunicator {
     answer: AddAnswerFunction<IMessageMap, IQuestionMap>;
-
-    tell: TellFunction<IMessageMap>;
     hear: AddHearFunction<IMessageMap>;
+
+    close: () => void;
+}
+
+interface IClientToServerCommunicator {
+    ask: AskFunction<IMessageMap, IQuestionMap>;
+    tell: TellFunction<IMessageMap>;
 
     close: () => void;
 }
@@ -46,9 +50,9 @@ interface ICommunicator {
 
 client.ts
 ```typescript
-import {ICommunicator} from "shared";
+import {IClientToServerCommunicator} from "shared";
 
-const server: ICommunicator = /* insert here code that sets up a communicator, e.g. connect to a server */;
+const server: IClientToServerCommunicator = /* insert here code that sets up a communicator, e.g. connect to a server */;
 
 // if "LOG" is first argument, second is typed to {message: string}
 server.tell("LOG", {message: "setting up..."}); 
@@ -63,15 +67,18 @@ if (server.ask("PLAY", {piece: "a", to: 10}).success) {
 server.tell("LOG", {message: "finishing..."});
 
 // if "STOP" is first argument, second is typed to {}
-server.stop("STOP", {});
+server.tell("STOP", {});
+
+server.close();
+
 
 ```
 
 server.ts
 ```typescript
-import {ICommunicator} from "shared";
+import {IServerToClientCommunicator} from "shared";
 
-const client: ICommunicator = /* insert here code that waits for a connection to be established */;
+const client: IServerToClientCommunicator = /* insert here code that waits for a connection to be established */;
 
 
 // if "LOG" is first argument, param in lambda is typed to {message: string}
