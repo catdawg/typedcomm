@@ -15,7 +15,7 @@ Example of a client / server communication typed with interfaces defined in a sh
 shared.ts
 ```typescript
 
-import { AddAnswerFunction, AddHearFunction, AskFunction, TellFunction } from "../src";
+import { AddAnswerFunction, AddHearFunction, AskFunction, TellFunction } from "typedcomm";
 
 interface IMessageMap {
     "PLAY": {piece: string, to: number};
