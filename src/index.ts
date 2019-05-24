@@ -1,106 +1,76 @@
 import { EventEmitter } from "events";
 
-// tslint:disable-next-line:interface-over-type-literal
-type MessageMap = Record<string, any>;
-type QuestionMap<MMap extends MessageMap> = Partial<Record<keyof MMap, keyof MMap>>;
+export type RequestFunctionAsync<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, request: P[K]["in"],
+) => Promise<P[K]["out"]>;
 
-type QuestionName
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>>
- = keyof QMap & keyof MMap;
+export type RequestFunction<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, request: P[K]["in"],
+) => P[K]["out"];
 
-type AnswerName
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>, Q extends QuestionName<MMap, QMap>>
- = QMap[Q];
+export type AddResponderFunctionAsync<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, handler: (request: P[K]["in"]) => Promise<P[K]["out"]>) => {cancel: () => void};
 
-export type AskAsyncFunction
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>>
- = <Q extends QuestionName<MMap, QMap>>
-    (questionName: Q, question: MMap[Q]) => Promise<MMap[AnswerName<MMap, QMap, Q>]>;
+export type AddResponderFunction<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, handler: (request: P[K]["in"]) => P[K]["out"]) => {cancel: () => void};
 
-export type AskFunction
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>>
- = <Q extends QuestionName<MMap, QMap>>
-    (questionName: Q, question: MMap[Q]) => MMap[AnswerName<MMap, QMap, Q>];
-
-export type TellFunction
-    <MMap extends MessageMap>
- = <M extends keyof MMap>
-    (messageName: M, message: MMap[M]) => void;
-
-export type AddHearFunction
-    <MMap extends MessageMap>
- = <M extends keyof MMap> (
-        messageName: M, hearer: (message: MMap[M]) => void)
-    => { cancel: () => void };
-
-export type AddAnswerAsyncFunction
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>> =
-        <Q extends QuestionName<MMap, QMap>> (
-            question: Q, answerer: (message: MMap[Q]) => Promise<MMap[AnswerName<MMap, QMap, Q>]>)
-            => { cancel: () => void };
-
-export type AddAnswerFunction
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>> =
-        <Q extends QuestionName<MMap, QMap>> (
-            question: Q, answerer: (message: MMap[Q]) => MMap[AnswerName<MMap, QMap, Q>])
-            => { cancel: () => void };
-
-export function getEventEmitterTeller<MMap extends MessageMap>(eventBus: EventEmitter): TellFunction<MMap> {
-    return (name: any, message: any) => {
-        eventBus.emit(name, message);
-    };
+export interface IEventEmitterRequester<Protocol> extends EventEmitter {
+    request: RequestFunctionAsync<Protocol>;
 }
 
-export function getEventEmitterHearer<MMap extends MessageMap>(eventBus: EventEmitter): AddHearFunction<MMap> {
-    return (name: any, handler: (message: any) => void) => {
-        eventBus.addListener(name, handler);
-
-        return {
-            cancel: () => eventBus.removeListener(name, handler),
-        };
-    };
+export interface IEventEmitterResponder<Protocol> extends EventEmitter {
+    addResponder: AddResponderFunctionAsync<Protocol>;
 }
 
-interface IFullQuestion {
-    message: any;
-    id: string;
-}
+export function createEventEmitterRequester<Protocol>(
+    eventEmitter: EventEmitter,
+    timeout: number = 2000,
+    ): IEventEmitterRequester<Protocol> {
 
-export function getEventEmitterAnswerer
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>>(
-        eventBus: EventEmitter): AddAnswerAsyncFunction<MMap, QMap> {
+    const typedEventEmitter: IEventEmitterRequester<Protocol> = eventEmitter as any;
 
-    return  (questionName: any, answerer: (message: any) => Promise<any>) => {
-        const listener = (question: IFullQuestion) => {
-            answerer(question.message).then((reply) => {
-                eventBus.emit("REPLY_" + questionName + "_" + question.id, reply);
-            });
-        };
-        eventBus.addListener("ASK_" + questionName, listener);
-
-        return {
-            cancel: () => eventBus.removeListener("ASK_" + questionName, listener),
-        };
-    };
-}
-
-export function getEventEmitterAsker
-    <MMap extends MessageMap, QMap extends QuestionMap<MMap>>(
-        eventBus: EventEmitter) {
-
-    const func: AskAsyncFunction<MMap, QMap> = async (questionName: any, question: any): Promise<any> => {
-        return await new Promise((resolve) => {
-            const messageID = Math.random().toString(36).substring(7);
-
-            eventBus.once("REPLY_" + questionName + "_" + messageID, (reply: any) => {
-                resolve(reply);
-            });
-            eventBus.emit("ASK_" + questionName, {
-                message: question,
-                id: messageID,
-            } as IFullQuestion);
+    typedEventEmitter.request = async (key: any, req: any) => {
+        const messageID = Math.floor(Math.random() * Math.floor(Number.MAX_SAFE_INTEGER));
+        return await new Promise((resolve, reject) => {
+            let done = false;
+            const handler = (response: any) => {
+                done = true;
+                resolve(response);
+            };
+            const channel = key + "_response_" + messageID;
+            eventEmitter.once(channel, handler);
+            eventEmitter.emit(key, {messageID, req});
+            setTimeout(() => {
+                if (done) {
+                    return;
+                }
+                eventEmitter.removeListener(channel, handler);
+                reject(new Error("timeout"));
+            }, timeout);
         });
     };
 
-    return func;
+    return typedEventEmitter;
+}
+
+export function createEventEmitterResponder<Protocol>(
+    eventEmitter: EventEmitter,
+    ): IEventEmitterResponder<Protocol> {
+
+    const typedEventEmitter: IEventEmitterResponder<Protocol> = eventEmitter as any;
+
+    typedEventEmitter.addResponder = (key: any, handler: any) => {
+
+        const listener = ({messageID, req}: any) => {
+            handler(req).then((res: any) => {
+                eventEmitter.emit(key + "_response_" + messageID, res);
+            });
+        };
+        eventEmitter.addListener(key, listener);
+
+        return {
+            cancel: () => eventEmitter.removeListener(key, listener),
+        };
+    };
+    return typedEventEmitter;
 }

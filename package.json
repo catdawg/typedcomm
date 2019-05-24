@@ -1,8 +1,9 @@
 {
     "name": "typedcomm",
     "version": "0.0.1",
-    "description": "typed communication",
+    "description": "Types for typed communication with typescript. Types are fun!",
     "main": "dist/index.js",
+    "types": "src/index.ts",
     "scripts": {
         "dist": "tsc --p tsconfig.dist.json",
         "test": "jest --forceExit --coverage --verbose -i --bail --detectOpenHandles",

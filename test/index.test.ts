@@ -1,79 +1,48 @@
 import { EventEmitter } from "events";
+import { createEventEmitterRequester, createEventEmitterResponder } from "../src";
 
-import {
-    getEventEmitterAnswerer,
-    getEventEmitterAsker,
-    getEventEmitterHearer,
-    getEventEmitterTeller} from "../src";
-
-interface IEmptyMessage {
-}
-
-interface IIDMessage {
-    name: string;
-    age: number;
-}
-
-interface IGetStateMessage {
-    prop: string;
-}
-
-interface IStateMessage {
-    value: number;
-}
-
-interface IMessageMap {
-    "NONE": IEmptyMessage;
-    "GREETING": IIDMessage;
-    "GET_STATE": IGetStateMessage;
-    "STATE": IStateMessage;
-}
-
-interface IQuestionMap {
-    "GET_STATE": "STATE";
+interface IConversationProtocol {
+    "GREETING": {
+        in: {greeting: string},
+        out: {greeting: string},
+    };
+    "HOW_ARE_YOU": {
+        in: {};
+        out: {good: boolean};
+    };
+    "BYE": {
+        in: {},
+        out: {},
+    };
 }
 
 describe("main test", () => {
 
-    it("test tell and hear", () => {
+    it("test request and reply", async () => {
         const john = new EventEmitter();
 
-        const johnTeller = getEventEmitterTeller<IMessageMap>(john);
-        const johnHearer = getEventEmitterHearer<IMessageMap>(john);
+        const johnRequester = createEventEmitterRequester<IConversationProtocol>(john);
 
-        let johnReceivedGreeting: IIDMessage = null;
-        const cancelGreetingJohnHearer = johnHearer("GREETING", (message) => {
-            johnReceivedGreeting = message;
+        const johnResponder = createEventEmitterResponder<IConversationProtocol>(john);
+
+        const cancelGreeting = johnResponder.addResponder("GREETING", async ({greeting}) => {
+            return {greeting: greeting + " to you too."};
         });
 
-        johnTeller("GREETING", {name: "unittestman", age: 30});
-
-        expect(johnReceivedGreeting.name).toBe("unittestman");
-        expect(johnReceivedGreeting.age).toBe(30);
-        johnReceivedGreeting = null;
-        cancelGreetingJohnHearer.cancel();
-
-        johnTeller("GREETING", {name: "unittestman2", age: 30});
-
-        expect(johnReceivedGreeting).toBeNull();
-    });
-
-    it("test ask and answer", async () => {
-        const john = new EventEmitter();
-
-        const johnAsker = getEventEmitterAsker<IMessageMap, IQuestionMap>(john);
-        const johnAnswerer = getEventEmitterAnswerer<IMessageMap, IQuestionMap>(john);
-
-        const greetingAnswerer = johnAnswerer("GET_STATE", async (message) => {
-
-            return {
-                value: 10,
-            };
+        johnResponder.addResponder("HOW_ARE_YOU", async () => {
+            return {good: true};
         });
 
-        const reply = await johnAsker("GET_STATE", {prop: "something"});
-        expect(reply.value).toBe(10);
+        johnResponder.addResponder("BYE", async () => {
+            return {};
+        });
 
-        greetingAnswerer.cancel();
+        expect((await johnRequester.request("GREETING", {greeting: "hey"})).greeting).toBe("hey to you too.");
+        expect((await johnRequester.request("HOW_ARE_YOU", {})).good).toBe(true);
+        expect((await johnRequester.request("BYE", {}))).toEqual({});
+
+        cancelGreeting.cancel();
+
+        await expect(johnRequester.request("GREETING", {greeting: "hey"})).rejects.toThrow();
     });
 });
