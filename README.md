@@ -10,7 +10,7 @@ TypedComm is a library for typescript projects that lets you define a protocol f
 
 # API
 
-This library provides two main functionalities, one is a function that is used to request. It looks like this:
+This library provides two main functionalities, one is a function that is used to request (RequestFunction) and another is used to respond (AddResponderFunction).
 
 ## RequestFunction
 
@@ -38,7 +38,7 @@ interface ExampleProtocol {
 
 The function maps the "request" parameter type to the "in" in the object pointed by the "key" in the Protocol, and the return type to the "out" in the same object.
 
-A promise version is also available "RequestFunctionAsync";
+A promise version is also available "RequestFunctionAsync".
 
 ## AddResponderFunction
 
@@ -50,7 +50,7 @@ type AddResponderFunction<P extends {[key: string]: any}> = <K extends keyof P>(
 It has a type parameter that specifies a protocol like RequestFunction.
 The function maps the request parameter in the handler lambda to the "in" pointed by "key" in the protocol, and the return of the lambda is pointed by "out". Additionally, it returns an object that lets you cancel the responder.
 
-Just like the RequestFunction, there's also a Promise version called AddResponderFunctionAsync;
+Just like the RequestFunction, there's also a Promise version called AddResponderFunctionAsync.
 
 ## EventEmitter
 
