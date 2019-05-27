@@ -16,10 +16,11 @@ function createEventEmitterRequester(eventEmitter, timeout = 2000) {
             let done = false;
             const handler = (response) => {
                 done = true;
+                eventEmitter.removeListener(channel, handler);
                 resolve(response);
             };
             const channel = key + "_response_" + messageID;
-            eventEmitter.once(channel, handler);
+            eventEmitter.addListener(channel, handler);
             eventEmitter.emit(key, { messageID, req });
             setTimeout(() => {
                 if (done) {
