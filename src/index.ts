@@ -1,5 +1,3 @@
-import { EventEmitter } from "events";
-
 export type RequestFunctionAsync<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, request: P[K]["in"],
 ) => Promise<P[K]["out"]>;
@@ -14,16 +12,22 @@ export type AddResponderFunctionAsync<P extends {[key: string]: any}> = <K exten
 export type AddResponderFunction<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, handler: (request: P[K]["in"]) => P[K]["out"]) => {cancel: () => void};
 
-export interface IEventEmitterRequester<Protocol> extends EventEmitter {
+interface IEventEmitter {
+    emit(event: string, ...args: any[]): boolean;
+    addListener(event: string, listener: (response: any) => void): this;
+    removeListener(event: string, listener: (response: any) => void): this;
+}
+
+export interface IEventEmitterRequester<Protocol> extends IEventEmitter {
     request: RequestFunctionAsync<Protocol>;
 }
 
-export interface IEventEmitterResponder<Protocol> extends EventEmitter {
+export interface IEventEmitterResponder<Protocol> extends IEventEmitter {
     addResponder: AddResponderFunctionAsync<Protocol>;
 }
 
 export function createEventEmitterRequester<Protocol>(
-    eventEmitter: EventEmitter,
+    eventEmitter: IEventEmitter,
     timeout: number = 2000,
     ): IEventEmitterRequester<Protocol> {
 
@@ -35,10 +39,11 @@ export function createEventEmitterRequester<Protocol>(
             let done = false;
             const handler = (response: any) => {
                 done = true;
+                eventEmitter.removeListener(channel, handler);
                 resolve(response);
             };
             const channel = key + "_response_" + messageID;
-            eventEmitter.once(channel, handler);
+            eventEmitter.addListener(channel, handler);
             eventEmitter.emit(key, {messageID, req});
             setTimeout(() => {
                 if (done) {
@@ -54,7 +59,7 @@ export function createEventEmitterRequester<Protocol>(
 }
 
 export function createEventEmitterResponder<Protocol>(
-    eventEmitter: EventEmitter,
+    eventEmitter: IEventEmitter,
     ): IEventEmitterResponder<Protocol> {
 
     const typedEventEmitter: IEventEmitterResponder<Protocol> = eventEmitter as any;
