@@ -12,70 +12,90 @@ export type AddResponderFunctionAsync<P extends {[key: string]: any}> = <K exten
 export type AddResponderFunction<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, handler: (request: P[K]["in"]) => P[K]["out"]) => {cancel: () => void};
 
-interface IEventEmitter {
+interface IEventReceiver {
+    addListener(event: string, listener: (response: any) => void): void;
+    removeListener(event: string, listener: (response: any) => void): void;
+}
+interface IEventSender {
     emit(event: string, ...args: any[]): boolean;
-    addListener(event: string, listener: (response: any) => void): this;
-    removeListener(event: string, listener: (response: any) => void): this;
 }
 
-export interface IEventEmitterRequester<Protocol> extends IEventEmitter {
-    request: RequestFunctionAsync<Protocol>;
-}
-
-export interface IEventEmitterResponder<Protocol> extends IEventEmitter {
-    addResponder: AddResponderFunctionAsync<Protocol>;
-}
-
-export function createEventEmitterRequester<Protocol>(
-    eventEmitter: IEventEmitter,
+export function createRequester<Protocol>(
+    eventReceiver: IEventReceiver,
+    eventSender: IEventSender,
     timeout: number = 2000,
-    ): IEventEmitterRequester<Protocol> {
+    ): RequestFunctionAsync<Protocol> {
 
-    const typedEventEmitter: IEventEmitterRequester<Protocol> = eventEmitter as any;
+    return async (key, request) => {
 
-    typedEventEmitter.request = async (key: any, req: any) => {
-        const messageID = Math.floor(Math.random() * Math.floor(Number.MAX_SAFE_INTEGER));
+        const id = Math.floor(Math.random() * Math.floor(Number.MAX_SAFE_INTEGER));
         return await new Promise((resolve, reject) => {
+
             let done = false;
-            const handler = (response: any) => {
+            const responseChannel = "TYPED_COMM_RESPONSE_" + id;
+            const responseHandler = ({failure, response}: {failure: any, response: any}) => {
                 done = true;
-                eventEmitter.removeListener(channel, handler);
-                resolve(response);
+                eventReceiver.removeListener(responseChannel, responseHandler);
+                if (failure != null) {
+                    reject(new Error(failure));
+                } else {
+                    resolve(response);
+                }
             };
-            const channel = key + "_response_" + messageID;
-            eventEmitter.addListener(channel, handler);
-            eventEmitter.emit(key, {messageID, req});
+            eventReceiver.addListener(responseChannel, responseHandler);
+
             setTimeout(() => {
                 if (done) {
                     return;
                 }
-                eventEmitter.removeListener(channel, handler);
+                eventReceiver.removeListener(responseChannel, responseHandler);
                 reject(new Error("timeout"));
             }, timeout);
+
+            eventSender.emit("TYPED_COMM_REQUEST", {
+                key, id, request,
+            });
         });
     };
-
-    return typedEventEmitter;
 }
 
-export function createEventEmitterResponder<Protocol>(
-    eventEmitter: IEventEmitter,
-    ): IEventEmitterResponder<Protocol> {
+export function createResponder<Protocol>(
+    eventReceiver: IEventReceiver,
+    eventSender: IEventSender,
+    ): AddResponderFunctionAsync<Protocol> {
 
-    const typedEventEmitter: IEventEmitterResponder<Protocol> = eventEmitter as any;
+    const handlers: Record<string, (req: any) => Promise<any>> = {};
 
-    typedEventEmitter.addResponder = (key: any, handler: any) => {
-
-        const listener = ({messageID, req}: any) => {
-            handler(req).then((res: any) => {
-                eventEmitter.emit(key + "_response_" + messageID, res);
+    eventReceiver.addListener("TYPED_COMM_REQUEST", ({key, id, request}) => {
+        const responseChannel = "TYPED_COMM_RESPONSE_" + id;
+        if (handlers[key] == null) {
+            eventSender.emit(responseChannel, {
+                failure: "no responder for " + key,
             });
-        };
-        eventEmitter.addListener(key, listener);
+        } else {
+            handlers[key](request).then((response) => {
+                eventSender.emit(responseChannel, {
+                    response,
+                });
+            }, (reason) => {
+                eventSender.emit(responseChannel, {
+                    failure: reason,
+                });
+            });
+        }
+    });
+
+    return (key: any, handler: any) => {
+        if (handlers[key] == null) {
+            handlers[key] = handler;
+        } else {
+            throw new Error("only one responder allowed for " + key);
+        }
 
         return {
-            cancel: () => eventEmitter.removeListener(key, listener),
+            cancel: () => {
+                handlers[key] = null;
+            },
         };
     };
-    return typedEventEmitter;
 }

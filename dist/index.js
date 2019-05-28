@@ -8,46 +8,71 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-function createEventEmitterRequester(eventEmitter, timeout = 2000) {
-    const typedEventEmitter = eventEmitter;
-    typedEventEmitter.request = (key, req) => __awaiter(this, void 0, void 0, function* () {
-        const messageID = Math.floor(Math.random() * Math.floor(Number.MAX_SAFE_INTEGER));
+function createRequester(eventReceiver, eventSender, timeout = 2000) {
+    return (key, request) => __awaiter(this, void 0, void 0, function* () {
+        const id = Math.floor(Math.random() * Math.floor(Number.MAX_SAFE_INTEGER));
         return yield new Promise((resolve, reject) => {
             let done = false;
-            const handler = (response) => {
+            const responseChannel = "TYPED_COMM_RESPONSE_" + id;
+            const responseHandler = ({ failure, response }) => {
                 done = true;
-                eventEmitter.removeListener(channel, handler);
-                resolve(response);
+                eventReceiver.removeListener(responseChannel, responseHandler);
+                if (failure != null) {
+                    reject(new Error(failure));
+                }
+                else {
+                    resolve(response);
+                }
             };
-            const channel = key + "_response_" + messageID;
-            eventEmitter.addListener(channel, handler);
-            eventEmitter.emit(key, { messageID, req });
+            eventReceiver.addListener(responseChannel, responseHandler);
             setTimeout(() => {
                 if (done) {
                     return;
                 }
-                eventEmitter.removeListener(channel, handler);
+                eventReceiver.removeListener(responseChannel, responseHandler);
                 reject(new Error("timeout"));
             }, timeout);
+            eventSender.emit("TYPED_COMM_REQUEST", {
+                key, id, request,
+            });
         });
     });
-    return typedEventEmitter;
 }
-exports.createEventEmitterRequester = createEventEmitterRequester;
-function createEventEmitterResponder(eventEmitter) {
-    const typedEventEmitter = eventEmitter;
-    typedEventEmitter.addResponder = (key, handler) => {
-        const listener = ({ messageID, req }) => {
-            handler(req).then((res) => {
-                eventEmitter.emit(key + "_response_" + messageID, res);
+exports.createRequester = createRequester;
+function createResponder(eventReceiver, eventSender) {
+    const handlers = {};
+    eventReceiver.addListener("TYPED_COMM_REQUEST", ({ key, id, request }) => {
+        const responseChannel = "TYPED_COMM_RESPONSE_" + id;
+        if (handlers[key] == null) {
+            eventSender.emit(responseChannel, {
+                failure: "no responder for " + key,
             });
-        };
-        eventEmitter.addListener(key, listener);
+        }
+        else {
+            handlers[key](request).then((response) => {
+                eventSender.emit(responseChannel, {
+                    response,
+                });
+            }, (reason) => {
+                eventSender.emit(responseChannel, {
+                    failure: reason,
+                });
+            });
+        }
+    });
+    return (key, handler) => {
+        if (handlers[key] == null) {
+            handlers[key] = handler;
+        }
+        else {
+            throw new Error("only one responder allowed for " + key);
+        }
         return {
-            cancel: () => eventEmitter.removeListener(key, listener),
+            cancel: () => {
+                handlers[key] = null;
+            },
         };
     };
-    return typedEventEmitter;
 }
-exports.createEventEmitterResponder = createEventEmitterResponder;
+exports.createResponder = createResponder;
 //# sourceMappingURL=index.js.map

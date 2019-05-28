@@ -52,9 +52,31 @@ The function maps the request parameter in the handler lambda to the "in" pointe
 
 Just like the RequestFunction, there's also a Promise version called AddResponderFunctionAsync.
 
-## EventEmitter
+## createRequester and createResponder
 
-The library also provides an example implementation of typed communication through an event emmitter using these functions. See the tests for more.
+```typescript
+
+interface IEventReceiver {
+    addListener(event: string, listener: (response: any) => void): this;
+    removeListener(event: string, listener: (response: any) => void): this;
+}
+interface IEventSender {
+    emit(event: string, ...args: any[]): boolean;
+}
+
+function createRequester<Protocol>(
+    eventReceiver: IEventReceiver,
+    eventSender: IEventSender,
+    timeout: number = 2000,
+    ): RequestFunctionAsync<Protocol>;
+
+function createResponder<Protocol>(
+    eventReceiver: IEventReceiver,
+    eventSender: IEventSender,
+    ): AddResponderFunctionAsync<Protocol>
+```
+
+This method will implement a protocol using the input and output objects that resemble event emitters. See the tests for understanding better how this works.
 
 # Full Example
 
