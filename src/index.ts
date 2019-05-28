@@ -22,11 +22,11 @@ export type AddResponderFunction<P extends {[key: string]: any}> = <K extends ke
     key: K, handler: (request: P[K]["in"]) => P[K]["out"]) => {cancel: () => void};
 
 export interface IEventReceiver {
-    addListener(event: string, listener: (response: any) => void): void;
-    removeListener(event: string, listener: (response: any) => void): void;
+    addListener(channel: string, listener: (response: any) => void): void;
+    removeListener(channel: string, listener: (response: any) => void): void;
 }
 export interface IEventSender {
-    emit(event: string, ...args: any[]): boolean;
+    emit(channel: string, data: any): void;
 }
 
 export function createSender<Protocol>(
