@@ -1,3 +1,5 @@
+import { stringify } from "querystring";
+
 export type RequestFunctionAsync<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, request: P[K]["in"],
 ) => Promise<P[K]["out"]>;
@@ -5,6 +7,13 @@ export type RequestFunctionAsync<P extends {[key: string]: any}> = <K extends ke
 export type RequestFunction<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, request: P[K]["in"],
 ) => P[K]["out"];
+
+export type SendFunction<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, message: P[K],
+) => void;
+
+export type AddReceiverFunction<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, handler: (message: P[K]) => void) => {cancel: () => void};
 
 export type AddResponderFunctionAsync<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, handler: (request: P[K]["in"]) => Promise<P[K]["out"]>) => {cancel: () => void};
@@ -18,6 +27,46 @@ export interface IEventReceiver {
 }
 export interface IEventSender {
     emit(event: string, ...args: any[]): boolean;
+}
+
+export function createSender<Protocol>(
+    eventSender: IEventSender,
+    ): SendFunction<Protocol> {
+
+    return async (key, message) => {
+        eventSender.emit("TYPED_COMM_SEND", {
+            key,
+            message,
+        });
+    };
+}
+
+export function createReceiver<Protocol>(
+    eventReceiver: IEventReceiver,
+    ): AddReceiverFunction<Protocol> {
+
+    const handlers: Record<string, (req: any) => Promise<any>> = {};
+
+    eventReceiver.addListener("TYPED_COMM_SEND", ({key, message}) => {
+        if (handlers[key] == null) {
+            return;
+        } else {
+            handlers[key](message);
+        }
+    });
+    return (key: any, handler: any) => {
+        if (handlers[key] == null) {
+            handlers[key] = handler;
+        } else {
+            throw new Error("only one responder allowed for " + key);
+        }
+
+        return {
+            cancel: () => {
+                handlers[key] = null;
+            },
+        };
+    };
 }
 
 export function createRequester<Protocol>(

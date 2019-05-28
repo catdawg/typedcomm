@@ -8,6 +8,40 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
     });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+function createSender(eventSender) {
+    return (key, message) => __awaiter(this, void 0, void 0, function* () {
+        eventSender.emit("TYPED_COMM_SEND", {
+            key,
+            message,
+        });
+    });
+}
+exports.createSender = createSender;
+function createReceiver(eventReceiver) {
+    const handlers = {};
+    eventReceiver.addListener("TYPED_COMM_SEND", ({ key, message }) => {
+        if (handlers[key] == null) {
+            return;
+        }
+        else {
+            handlers[key](message);
+        }
+    });
+    return (key, handler) => {
+        if (handlers[key] == null) {
+            handlers[key] = handler;
+        }
+        else {
+            throw new Error("only one responder allowed for " + key);
+        }
+        return {
+            cancel: () => {
+                handlers[key] = null;
+            },
+        };
+    };
+}
+exports.createReceiver = createReceiver;
 function createRequester(eventReceiver, eventSender, timeout = 2000) {
     return (key, request) => __awaiter(this, void 0, void 0, function* () {
         const id = Math.floor(Math.random() * Math.floor(Number.MAX_SAFE_INTEGER));

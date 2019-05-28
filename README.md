@@ -10,7 +10,43 @@ TypedComm is a library for typescript projects that lets you define a protocol f
 
 # API
 
-This library provides two main functionalities, one is a function that is used to request (RequestFunction) and another is used to respond (AddResponderFunction).
+This library provides two main functionalities:
+ - Send and Receive:  A function that is used to send messages (SendFunction) and another to receive those messages (AddReceiverFunction).
+ - Request and Response: A function that is used to request (RequestFunction), another is used to respond (AddResponderFunction).
+
+Sending has no response, while requesting has a response. So you use Send when you want to fire and forget, and you use request when you expect a response.
+
+## SendFunction
+
+```typescript
+type SendFunction<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, message: P[K],
+) => void;
+```
+
+It has a type parameter that specifies the protocol. The protocol looks like this:
+
+```typescript
+interface ExampleProtocol {
+    "A": string,
+    "B": {
+        res: number,
+    },
+    // etc...
+}
+```
+
+The function maps the "message" parameter type to the value pointed by the "key" in the Protocol.
+
+## AddReceiverFunction
+
+```typescript
+type AddReceiverFunction<P extends {[key: string]: any}> = <K extends keyof P>(
+    key: K, handler: (message: P[K]) => void) => {cancel: () => void};
+```
+
+It has a type parameter that specifies a protocol like SendFunction.
+The function maps the request parameter in the handler lambda to the value pointed by "key" in the protocolAdditionally, it returns an object that lets you cancel the receiver.
 
 ## RequestFunction
 
@@ -87,7 +123,7 @@ shared.ts
 
 import { AddResponderFunction, RequestFunction } from "typedcomm";
 
-interface IProtocol {
+interface ITwoWayProtocol {
     "START": {
         in: {},
         out: {pieces: [string]},
@@ -96,20 +132,24 @@ interface IProtocol {
         in: {piece: string, to: number},
         out: {success: boolean},
     };
-    "END": {
-        in: {},
-        out: {},
-    };
+
+    // any new message is added here
+}
+interface IOneWayProtocol {
+    "LOG": string;
+    "END": null;
 
     // any new message is added here
 }
 
 interface IServerToClientCommunicator {
-    addResponder: AddResponderFunction<IProtocol>;
+    addResponder: AddResponderFunction<ITwoWayProtocol>;
+    addReceiver: AddReceiverFunction<IOneWayProtocol>;
 }
 
 interface IClientToServerCommunicator {
-    request: RequestFunction<IProtocol>;
+    request: RequestFunction<ITwoWayProtocol>;
+    send: SendFunction<IOneWayProtocol>;
 }
 
 ```
@@ -125,12 +165,14 @@ const pieces = server.request("START", {}).pieces;
 
 // if "PLAY" is first argument, second is typed to {piece: string, to: number} and return is {success: boolean}
 if (server.request("PLAY", {piece: pieces[0]}).success) {
-    console.log("YEY");
+    // if "LOG" is first argument, second is typed to string
+    server.send("LOG", "YEY");
 } else {
-    console.log(":(");
+    server.send("LOG", ":(");
 }
 
-server.request("END", {});
+// if "END" is first argument, second is typed to string
+server.send("END", null);
 
 ```
 
@@ -152,18 +194,23 @@ client.addResponder("START", ({}) => {
         return {success: pieces.indexOf(piece) !== -1};
     });
 
+    // if "LOG" is first argument,
+    // param in lambda is typed to string
+    const cancelLog = client.addReceiver("LOG", (message) => {
+        console.log("Client said: " + message);
+    });
+
     // if "END" is first argument,
-    // param in lambda is typed to {} and the lambda has to return {}
-    const cancelEnd = client.addResponder("END", () => {
+    // param in lambda is typed to null
+    const cancelEnd = client.addReceiver("END", () => {
         for (const canceller of cancelResponders) {
             canceller.cancel();
         }
-
-        return {};
     });
 
     cancelResponders.push(cancelPlay);
     cancelResponders.push(cancelEnd);
+    cancelResponders.push(cancelLog);
 
     return {pieces};
 });
