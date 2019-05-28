@@ -12,11 +12,11 @@ export type AddResponderFunctionAsync<P extends {[key: string]: any}> = <K exten
 export type AddResponderFunction<P extends {[key: string]: any}> = <K extends keyof P>(
     key: K, handler: (request: P[K]["in"]) => P[K]["out"]) => {cancel: () => void};
 
-interface IEventReceiver {
+export interface IEventReceiver {
     addListener(event: string, listener: (response: any) => void): void;
     removeListener(event: string, listener: (response: any) => void): void;
 }
-interface IEventSender {
+export interface IEventSender {
     emit(event: string, ...args: any[]): boolean;
 }
 

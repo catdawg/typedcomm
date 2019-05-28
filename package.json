@@ -1,6 +1,6 @@
 {
     "name": "typedcomm",
-    "version": "0.0.4",
+    "version": "0.0.5",
     "description": "Types for typed communication with typescript. Types are fun!",
     "main": "dist/index.js",
     "types": "src/index.ts",

@@ -57,8 +57,8 @@ Just like the RequestFunction, there's also a Promise version called AddResponde
 ```typescript
 
 interface IEventReceiver {
-    addListener(event: string, listener: (response: any) => void): this;
-    removeListener(event: string, listener: (response: any) => void): this;
+    addListener(event: string, listener: (response: any) => void): void;
+    removeListener(event: string, listener: (response: any) => void): void;
 }
 interface IEventSender {
     emit(event: string, ...args: any[]): boolean;
